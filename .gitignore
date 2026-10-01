@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+bun.lock
+bun.lockb
+# written by Claude Code when it loads the mod
+.claude-plugin/types/
+tsconfig.json

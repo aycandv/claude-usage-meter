@@ -1,0 +1,10 @@
+{
+  "name": "usage-ticker",
+  "version": "0.2.0",
+  "description": "A two-row usage board above the Claude Code prompt: a weekly pace gauge and an LED crawl of today's spend per model.",
+  "author": { "name": "Aycan Deniz Vit", "url": "https://github.com/aycandv" },
+  "homepage": "https://github.com/aycandv/claude-usage-meter",
+  "repository": "https://github.com/aycandv/claude-usage-meter",
+  "license": "MIT",
+  "keywords": ["usage", "ccusage", "tokens", "limits", "mod"]
+}
