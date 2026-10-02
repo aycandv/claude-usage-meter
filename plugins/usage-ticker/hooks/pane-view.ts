@@ -44,6 +44,7 @@ export type PaneView = {
   weekCaption: string
   weekDanger: boolean
   weekUsed: string | null // '39% used', for a pane drawn without its ring
+  readingAge: string | null // 'reading 4 min ago': how stale the weekly figures are
   accent: string
 }
 
@@ -67,7 +68,7 @@ export const rowColumns = (columns: number, nameW: number, detailW: number, valu
   return { nameCols, barCols, detailCols, valueCols: valueW }
 }
 
-export const paneView = (input: PanelInput, columns: number): PaneView => {
+export const paneView = (input: PanelInput, columns: number, readingAge: string | null = null): PaneView => {
   const names = input.models.map(m => m.name.slice(0, NAME_MAX_COLS))
   const details = input.models.map(m => m.detail ?? '')
   const longest = (xs: string[]) => Math.max(0, ...xs.map(x => [...x].length))
@@ -101,6 +102,7 @@ export const paneView = (input: PanelInput, columns: number): PaneView => {
     weekCaption: cap ? cap.text : 'No weekly limit reading yet',
     weekDanger: cap?.isDanger ?? false,
     weekUsed: input.week ? `${Math.round(Math.max(0, input.week.usedPct))}% used` : null,
+    readingAge: input.week ? readingAge : null,
     accent: hex(accent),
   }
 }
@@ -168,4 +170,4 @@ export const sparkKey = (daily: readonly PanelDay[], accent: string, width: numb
 // What a pane redraw is for: everything the pane shows that changes, as one string. The diagnostic line is no part
 // of it: it is read afresh at every draw, and asking a redraw for it would chase its own counters.
 export const paneKey = (v: PaneView): string =>
-  JSON.stringify([v.total, v.meta, v.source, v.rows, v.emptyText, v.peak, v.pace, v.weekCaption, v.weekDanger, v.accent, ringKey(v.week, v.now, v.offsetMin), v.daily])
+  JSON.stringify([v.total, v.meta, v.source, v.rows, v.emptyText, v.peak, v.pace, v.weekCaption, v.weekDanger, v.readingAge, v.accent, ringKey(v.week, v.now, v.offsetMin), v.daily])

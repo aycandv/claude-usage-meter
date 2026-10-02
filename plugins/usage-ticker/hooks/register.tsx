@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { encodeCells } from './base64'
 import { BUTTON_COLS, LEAD_PX, boardFrame, rasterWidth, reserveFor, textLine } from './board'
 import { cardsFromDay, dayTotal, loadingCards, nextSpend, parseCcusage, unavailableCards } from './cards'
-import { PX_PER_COLUMN, deskClock, diagLine, firstReading, framePhase, memoMarkup, panelInput, panelWidthFor, reasonFor, redrawDue, stripInput, stripKeyParts, stripWidthFor } from './desktop-state'
+import { PX_PER_COLUMN, deskClock, diagLine, firstReading, framePhase, percentMoved, readingAge, memoMarkup, panelInput, panelWidthFor, reasonFor, redrawDue, stripInput, stripKeyParts, stripWidthFor } from './desktop-state'
 import type { DesktopState, Memo, StripPart } from './desktop-state'
 import type { DayEntry, Parsed } from './cards'
 import { sevenDay, weekFromLimit } from './gauge'
@@ -50,6 +50,7 @@ let cards: CardText[] = loadingCards()
 let board = buildStrip(cards)
 let rangeLabel = '' // the small caption under the button, set together with the cards
 let limit: Limit | undefined
+let limitAt: number | null = null // when the last weekly reading was received (a push, the sampler, the start)
 let status = newStatus() // turns of the main conversation only; a subagent's turn is not one of them
 let offsetMin = 0 // minutes east of UTC, from `date +%z`
 let scroll = newScroll(LEAD_PX)
@@ -123,6 +124,7 @@ const stripAsk = (now: number, input: ReturnType<typeof deskStrip>) => {
     now,
     showsPlaceholder: stripShown?.placeholder ?? true,
     firstReading: firstReading(stripShown?.parts ?? null, parts),
+    percentMoved: percentMoved(stripShown?.parts ?? null, parts),
   })
   return { parts, key, due }
 }
@@ -145,7 +147,7 @@ const stripDrawing = (now: number): Drawing => {
   return stripShown.drawing
 }
 // The pane's values, as text for native elements: they change in place, nothing reloads.
-const paneNow = (now: number) => paneView(deskPanel(now), paneColumns ?? 56)
+const paneNow = (now: number) => paneView(deskPanel(now), paneColumns ?? 56, readingAge(now, limitAt))
 
 // A blit repaints the Raster's cells and nothing else. When what the tree holds has changed (the line of text, the
 // button's caption, the band's shape), the band has to be drawn again.
@@ -253,6 +255,7 @@ const sampleSession = async ($: EngineInterface) => {
       const found = sevenDay(usage.rateLimits)
       if (found !== undefined) {
         limit = found
+        limitAt = await clockNow($)
         dirty = true
         redrawIf($, false) // as a pushed reading: the text line is drawn again; the strip's tick sees the ring
       }
@@ -271,6 +274,7 @@ const start = async ($: EngineInterface) => {
   await loadPeriod($)
   const usage = await $.session.usage().catch(() => null)
   if (usage) limit = sevenDay(usage.rateLimits)
+  if (limit !== undefined) limitAt = await clockNow($)
   rebuildCards(await clockNow($)) // until ccusage answers: the loading card and the caption of the saved period
   askRedraw($)
   await sampleSession($)
@@ -388,6 +392,7 @@ export const register: Register = on => {
   // Pushed by the engine when a limit window moves, so there is nothing to poll.
   on('session.measure', async ($, e, next) => {
     limit = sevenDay(e.rateLimits)
+    if (limit !== undefined) limitAt = await clockNow($) // measured after each main turn: the last response's reading
     dirty = true
     redrawIf($, false) // the Raster keeps its size when the gauge comes or goes, so only the text line needs a redraw
     return next(e)
@@ -528,7 +533,10 @@ export const register: Register = on => {
                 {v.pace !== null ? (
                   <Text color={INK.label}>
                     Pace <Text color={INK.text}>{v.pace}</Text>
+                    {v.readingAge !== null ? <Text color={INK.dim}>{` · ${v.readingAge}`}</Text> : null}
                   </Text>
+                ) : v.readingAge !== null ? (
+                  <Text color={INK.dim}>{v.readingAge}</Text>
                 ) : null}
               </Box>
             </Box>

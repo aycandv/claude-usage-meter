@@ -70,11 +70,19 @@ export type RedrawAsk = {
   now: number
   showsPlaceholder: boolean
   firstReading: boolean // the ring on screen is empty and a weekly reading has arrived
+  percentMoved: boolean // the ring's whole percent differs from the one on screen
 }
+
+// A new whole percent on the ring is worth a quicker redraw than other figures: after the turn, 3 s of quiet,
+// and at least 60 s since the last drawing.
+export const FAST_IDLE_MS = 3_000
+export const FAST_GAP_MS = 60_000
 export const redrawDue = (a: RedrawAsk): boolean => {
   if (!a.keyChanged) return false
   if (a.userInitiated || a.showsPlaceholder || a.firstReading || a.lastDrawAt === null) return true
-  if (a.working || a.idleSince === null || a.now - a.idleSince < DEFER_IDLE_MS) return false
+  if (a.working || a.idleSince === null) return false
+  if (a.percentMoved && a.now - a.idleSince >= FAST_IDLE_MS && a.now - a.lastDrawAt >= FAST_GAP_MS) return true
+  if (a.now - a.idleSince < DEFER_IDLE_MS) return false
   return a.now - a.lastDrawAt >= DEFER_MIN_GAP_MS
 }
 
@@ -189,7 +197,7 @@ export const weekLook = (week: Week | null, now: number, offsetMin: number) =>
   week === null ? null : [caption(week, now, offsetMin).text, Math.round(week.usedPct), week.elapsedFrac === null ? null : Math.round(week.elapsedFrac * 100)]
 
 // What the strip shows, part by part, give or take the ticker's position. Equal parts draw the same picture.
-export const STRIP_PARTS = ['width', 'period', 'total', 'cards', 'range', 'week'] as const
+export const STRIP_PARTS = ['width', 'period', 'total', 'cards', 'range', 'week', 'percent'] as const
 export type StripPart = (typeof STRIP_PARTS)[number]
 export const stripKeyParts = (i: StripInput): Record<StripPart, unknown> => ({
   width: i.width,
@@ -197,8 +205,23 @@ export const stripKeyParts = (i: StripInput): Record<StripPart, unknown> => ({
   total: [i.total, i.tokens],
   cards: [i.cards, i.emptyText ?? ''],
   range: i.rangeChip,
-  week: weekLook(i.week, i.now, i.offsetMin),
+  week: i.week === null ? null : [caption(i.week, i.now, i.offsetMin).text, i.week.elapsedFrac === null ? null : Math.round(i.week.elapsedFrac * 100)],
+  percent: i.week === null ? null : Math.round(i.week.usedPct), // the ring's figure, apart from the clock's drift
 })
+
+// The ring's whole percent moved between two readings (a first reading has its own rule).
+export const percentMoved = (shown: Record<StripPart, unknown> | null, next: Record<StripPart, unknown>): boolean =>
+  shown !== null && shown.percent !== null && next.percent !== null && shown.percent !== next.percent
+
+// How old the weekly reading is: the engine's figures are those of this session's last response, so they go stale
+// while it is idle, whatever other sessions spend. From when it was received, not when it was drawn.
+export const readingAge = (now: number, readAt: number | null): string | null => {
+  if (readAt === null) return null
+  const min = Math.floor(Math.max(0, now - readAt) / 60_000)
+  if (min < 1) return 'reading just now'
+  if (min < 90) return `reading ${min} min ago`
+  return `reading ${Math.round(min / 6) / 10} h ago`
+}
 
 // The empty ring on screen meets its first weekly reading (the desktop often has none until the first response).
 export const firstReading = (shown: Record<StripPart, unknown> | null, next: Record<StripPart, unknown>): boolean =>

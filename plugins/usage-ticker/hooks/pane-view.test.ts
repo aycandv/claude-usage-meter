@@ -124,3 +124,10 @@ test('the weekly percent is there as text for a pane drawn without its Svgs', ()
   expect(view().weekUsed).toBe('39% used')
   expect(view({ week: null }).weekUsed).toBeNull()
 })
+
+test('the reading age rides along with a weekly reading, and moves the pane key', () => {
+  const v = paneView(panelInput(state(), 400), 56, 'reading 3 min ago')
+  expect(v.readingAge).toBe('reading 3 min ago')
+  expect(paneView(panelInput(state({ week: null }), 400), 56, 'reading 3 min ago').readingAge).toBeNull()
+  expect(paneKey(v)).not.toBe(paneKey(paneView(panelInput(state(), 400), 56, 'reading 4 min ago')))
+})

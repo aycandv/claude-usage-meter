@@ -3,6 +3,8 @@ import { test, expect } from 'claude-code/testing'
 import type { DayEntry } from './cards'
 import {
   DEFER_IDLE_MS,
+  FAST_GAP_MS,
+  FAST_IDLE_MS,
   DEFER_MIN_GAP_MS,
   DESK_CLOCK_MS,
   DESK_SPEED,
@@ -12,6 +14,8 @@ import {
   deskClock,
   diagLine,
   firstReading,
+  percentMoved,
+  readingAge,
   reasonFor,
   stripKeyParts,
   framePhase,
@@ -95,7 +99,7 @@ test('neither the pace nor a turn has any part in the strip: no speed in its key
 })
 
 const due = (over: Partial<Parameters<typeof redrawDue>[0]> = {}) =>
-  redrawDue({ working: false, userInitiated: false, keyChanged: true, lastDrawAt: 0, idleSince: 0, now: 10 * 60_000, showsPlaceholder: false, firstReading: false, ...over })
+  redrawDue({ working: false, userInitiated: false, keyChanged: true, lastDrawAt: 0, idleSince: 0, now: 10 * 60_000, showsPlaceholder: false, firstReading: false, percentMoved: false, ...over })
 
 test('redrawDue: nothing to draw when the key has not moved, whoever asks', () => {
   expect(due({ keyChanged: false })).toBe(false)
@@ -267,7 +271,7 @@ test('reasonFor names the parts of the strip that changed, in a fixed order', ()
   expect(reasonFor(parts, parts)).toBe('none')
   expect(reasonFor(parts, stripKeyParts(stripInput(state(), 600, 50)))).toBe('none') // the phase is no part of it
   expect(reasonFor(parts, stripKeyParts(stripInput(state(), 640, 0)))).toBe('width')
-  expect(reasonFor(parts, stripKeyParts(stripInput(state({ week: null }), 600, 0)))).toBe('week')
+  expect(reasonFor(parts, stripKeyParts(stripInput(state({ week: null }), 600, 0)))).toBe('week+percent')
   expect(reasonFor(parts, stripKeyParts(stripInput(state({ rangeLabel: 'Oct 2' }), 600, 0)))).toBe('range')
   expect(reasonFor(parts, stripKeyParts(stripInput(state({ period: 'week', rangeLabel: 'since Sep 28' }), 600, 0)))).toBe('period+total+cards+range')
   const more: DayEntry[] = [...DAYS.slice(0, 2), { ...DAYS[2]!, totalCost: 41 }]
@@ -296,4 +300,37 @@ test('firstReading: a strip without a reading on screen meets one', () => {
   expect(firstReading(some, more)).toBe(false)
   expect(firstReading(some, none)).toBe(false)
   expect(firstReading(null, some)).toBe(false) // nothing on screen yet: that is the first drawing anyway
+})
+
+test('redrawDue: a new whole percent on the ring waits for the turn to end, then 3 s of quiet, at least 60 s after the last drawing', () => {
+  const now = 10 * 60_000
+  const fast = (over: Partial<Parameters<typeof redrawDue>[0]>) => due({ percentMoved: true, lastDrawAt: now - 4 * 60_000, idleSince: now - 3_000, ...over })
+  expect(fast({})).toBe(true) // 4 minutes since the last drawing: under the 5 minute rule, over the 60 s floor
+  expect(fast({ working: true, idleSince: null })).toBe(false) // never mid-turn
+  expect(fast({ idleSince: now - 2_999 })).toBe(false)
+  expect(fast({ lastDrawAt: now - 59_999 })).toBe(false)
+  expect(fast({ lastDrawAt: now - 60_000 })).toBe(true)
+  expect(due({ percentMoved: false, lastDrawAt: now - 4 * 60_000, idleSince: now - 3_000 })).toBe(false) // other figures keep the slow rule
+  expect(FAST_IDLE_MS).toBe(3_000)
+  expect(FAST_GAP_MS).toBe(60_000)
+})
+
+test('percentMoved: only a new whole percent between two readings, not a caption or notch drift', () => {
+  const at = (week: Week | null, now = NOW) => stripKeyParts(stripInput(state({ week, now }), 600, 0))
+  expect(percentMoved(at(WEEK), at({ ...WEEK, usedPct: 40 }))).toBe(true)
+  expect(percentMoved(at(WEEK), at({ ...WEEK, usedPct: 39.4 }))).toBe(false) // rounds to the same 39
+  expect(percentMoved(at(WEEK), at({ ...WEEK, elapsedFrac: 0.52 }))).toBe(false) // the clock moved the notch and caption
+  expect(percentMoved(at(null), at(WEEK))).toBe(false) // a first reading has its own rule
+  expect(percentMoved(null, at(WEEK))).toBe(false)
+})
+
+test('readingAge says how old the weekly reading is, from when it was received', () => {
+  const t = 1_000_000_000
+  expect(readingAge(t + 59_000, t)).toBe('reading just now')
+  expect(readingAge(t + 60_000, t)).toBe('reading 1 min ago')
+  expect(readingAge(t + 89 * 60_000, t)).toBe('reading 89 min ago')
+  expect(readingAge(t + 90 * 60_000, t)).toBe('reading 1.5 h ago')
+  expect(readingAge(t + 5 * 3600_000, t)).toBe('reading 5 h ago')
+  expect(readingAge(t, null)).toBeNull()
+  expect(readingAge(t - 5_000, t)).toBe('reading just now') // a clock that steps back
 })
