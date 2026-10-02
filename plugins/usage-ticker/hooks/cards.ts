@@ -45,28 +45,42 @@ const tokensOf = (m: ModelRow) => m.inputTokens + m.outputTokens + m.cacheCreati
 // The day's spend: the reported total, else the sum of its models.
 export const dayTotal = (day: Day | undefined): number => day?.totalCost ?? (day?.modelBreakdowns ?? []).reduce((sum, m) => sum + m.cost, 0)
 
-// The whole stretch first, named `title`, then each model by cost, biggest first. Ids that shorten to the
-// same name (a dated one and an undated one) are one card, as two cards of one name would only confuse.
-export const cardsFromDay = (day: Day | undefined, title = 'today'): CardText[] => {
-  const byName = new Map<string, { cost: number; tokens: number }>()
-  let tokens = 0
+export type ModelSum = { name: string; cost: number; tokens: number }
+
+// Each model's cost and tokens, biggest cost first. Ids that shorten to the same name (a dated one and an undated
+// one) are one model, as two of one name would only confuse.
+export const modelSums = (day: Day | undefined): ModelSum[] => {
+  const byName = new Map<string, ModelSum>()
   for (const m of day?.modelBreakdowns ?? []) {
     const name = prettyModel(m.modelName)
-    const card = byName.get(name) ?? { cost: 0, tokens: 0 }
-    card.cost += m.cost
-    card.tokens += tokensOf(m)
-    byName.set(name, card)
-    tokens += tokensOf(m)
+    const sum = byName.get(name) ?? { name, cost: 0, tokens: 0 }
+    sum.cost += m.cost
+    sum.tokens += tokensOf(m)
+    byName.set(name, sum)
   }
-  const models = [...byName].sort(([, a], [, b]) => b.cost - a.cost)
-  // Past eight models the smallest are one card, so a long tail does not stretch the crawl. It is never a card for one other.
-  const tail = models.length > MAX_MODEL_CARDS ? models.slice(MAX_MODEL_CARDS - 1) : []
-  const shown = models.slice(0, models.length - tail.length)
-  const others = tail.length === 0 ? [] : [{ name: `${tail.length} others`, value: money(tail.reduce((sum, [, m]) => sum + m.cost, 0)), extra: tok(tail.reduce((sum, [, m]) => sum + m.tokens, 0)) }]
+  return [...byName.values()].sort((a, b) => b.cost - a.cost)
+}
+
+// Past eight models the smallest are one `N others` entry, so a long tail does not stretch the crawl. It is
+// never an entry for one other.
+export const capModels = (models: readonly ModelSum[]): { shown: ModelSum[]; others: ModelSum | null } => {
+  if (models.length <= MAX_MODEL_CARDS) return { shown: [...models], others: null }
+  const tail = models.slice(MAX_MODEL_CARDS - 1)
+  return {
+    shown: models.slice(0, MAX_MODEL_CARDS - 1),
+    others: { name: `${tail.length} others`, cost: tail.reduce((s, m) => s + m.cost, 0), tokens: tail.reduce((s, m) => s + m.tokens, 0) },
+  }
+}
+
+// The whole stretch first, named `title`, then each model by cost, biggest first.
+export const cardsFromDay = (day: Day | undefined, title = 'today'): CardText[] => {
+  const models = modelSums(day)
+  const tokens = models.reduce((s, m) => s + m.tokens, 0)
+  const { shown, others } = capModels(models)
   return [
     { name: title, value: money(dayTotal(day)), extra: `${tok(tokens)} tokens` },
-    ...shown.map(([name, m]) => ({ name, value: money(m.cost), extra: tok(m.tokens) })),
-    ...others,
+    ...shown.map(m => ({ name: m.name, value: money(m.cost), extra: tok(m.tokens) })),
+    ...(others ? [{ name: others.name, value: money(others.cost), extra: tok(others.tokens) }] : []),
   ]
 }
 

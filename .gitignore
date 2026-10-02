@@ -3,5 +3,5 @@ node_modules/
 bun.lock
 bun.lockb
 # written by Claude Code when it loads the mod
-.claude-plugin/types/
-tsconfig.json
+plugins/usage-ticker/.claude-plugin/types/
+plugins/usage-ticker/tsconfig.json

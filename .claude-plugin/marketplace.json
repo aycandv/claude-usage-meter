@@ -1,16 +1,25 @@
 {
   "name": "claude-usage-meter",
   "description": "A usage board mod for Claude Code.",
-  "owner": { "name": "Aycan Deniz Vit", "url": "https://github.com/aycandv" },
+  "owner": {
+    "name": "Aycan Deniz Vit",
+    "url": "https://github.com/aycandv"
+  },
   "plugins": [
     {
       "name": "usage-ticker",
-      "description": "A two-row usage board above the prompt: a weekly pace gauge and an LED crawl of today's spend per model.",
-      "source": "./",
+      "description": "A usage board for Claude Code: a weekly pace gauge and a sliding ticker of your spend per model, in the terminal and on the desktop.",
+      "source": "./plugins/usage-ticker",
       "category": "productivity",
-      "version": "0.2.0",
+      "version": "0.3.6",
       "license": "MIT",
-      "keywords": ["usage", "ccusage", "tokens", "limits", "mod"]
+      "keywords": [
+        "usage",
+        "ccusage",
+        "tokens",
+        "limits",
+        "mod"
+      ]
     }
   ]
 }
