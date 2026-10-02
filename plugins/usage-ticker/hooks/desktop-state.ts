@@ -56,7 +56,8 @@ export const framePhase = (start: number, now: number): number => phaseAt(start,
 
 // When new figures may replace the strip on screen. Every new drawing reloads the surface's frame (a blink, and
 // the ticker restarts), so: what the person did (a period, a tab, a resize, the first drawing) at once; a
-// placeholder ("Reading usage…") at once; anything else never while a turn runs, only after 15 s of quiet, and
+// placeholder ("Reading usage…") and the first weekly reading into an empty ring at once; anything else never
+// while a turn runs, only after 15 s of quiet, and
 // at most once in five minutes.
 export const DEFER_IDLE_MS = 15_000
 export const DEFER_MIN_GAP_MS = 5 * 60_000
@@ -68,10 +69,11 @@ export type RedrawAsk = {
   idleSince: number | null // when the last turn ended (null while one runs)
   now: number
   showsPlaceholder: boolean
+  firstReading: boolean // the ring on screen is empty and a weekly reading has arrived
 }
 export const redrawDue = (a: RedrawAsk): boolean => {
   if (!a.keyChanged) return false
-  if (a.userInitiated || a.showsPlaceholder || a.lastDrawAt === null) return true
+  if (a.userInitiated || a.showsPlaceholder || a.firstReading || a.lastDrawAt === null) return true
   if (a.working || a.idleSince === null || a.now - a.idleSince < DEFER_IDLE_MS) return false
   return a.now - a.lastDrawAt >= DEFER_MIN_GAP_MS
 }
@@ -197,6 +199,10 @@ export const stripKeyParts = (i: StripInput): Record<StripPart, unknown> => ({
   range: i.rangeChip,
   week: weekLook(i.week, i.now, i.offsetMin),
 })
+
+// The empty ring on screen meets its first weekly reading (the desktop often has none until the first response).
+export const firstReading = (shown: Record<StripPart, unknown> | null, next: Record<StripPart, unknown>): boolean =>
+  shown !== null && shown.week === null && next.week !== null
 
 // A redraw is due only when the key moves.
 export const stripKey = (i: StripInput): string => JSON.stringify(stripKeyParts(i))

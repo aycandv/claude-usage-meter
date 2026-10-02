@@ -11,6 +11,7 @@ import {
   dailySeries,
   deskClock,
   diagLine,
+  firstReading,
   reasonFor,
   stripKeyParts,
   framePhase,
@@ -94,7 +95,7 @@ test('neither the pace nor a turn has any part in the strip: no speed in its key
 })
 
 const due = (over: Partial<Parameters<typeof redrawDue>[0]> = {}) =>
-  redrawDue({ working: false, userInitiated: false, keyChanged: true, lastDrawAt: 0, idleSince: 0, now: 10 * 60_000, showsPlaceholder: false, ...over })
+  redrawDue({ working: false, userInitiated: false, keyChanged: true, lastDrawAt: 0, idleSince: 0, now: 10 * 60_000, showsPlaceholder: false, firstReading: false, ...over })
 
 test('redrawDue: nothing to draw when the key has not moved, whoever asks', () => {
   expect(due({ keyChanged: false })).toBe(false)
@@ -281,3 +282,18 @@ test('stripKey is the parts, so equal parts are equal keys', () => {
   expect(stripKey(stripInput(state(), 600, 0))).toBe(JSON.stringify(stripKeyParts(stripInput(state(), 600, 99))))
 })
 
+
+test('redrawDue: the first weekly reading fills the empty ring at once, even mid-turn', () => {
+  expect(due({ firstReading: true, working: true, idleSince: null, lastDrawAt: 10 * 60_000 - 1 })).toBe(true)
+  expect(due({ firstReading: false, working: true, idleSince: null, lastDrawAt: 10 * 60_000 - 1 })).toBe(false) // a later change waits
+})
+
+test('firstReading: a strip without a reading on screen meets one', () => {
+  const none = stripKeyParts(stripInput(state({ week: null }), 600, 0))
+  const some = stripKeyParts(stripInput(state(), 600, 0))
+  const more = stripKeyParts(stripInput(state({ week: { ...WEEK, usedPct: 60 } }), 600, 0))
+  expect(firstReading(none, some)).toBe(true)
+  expect(firstReading(some, more)).toBe(false)
+  expect(firstReading(some, none)).toBe(false)
+  expect(firstReading(null, some)).toBe(false) // nothing on screen yet: that is the first drawing anyway
+})

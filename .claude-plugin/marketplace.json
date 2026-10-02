@@ -11,7 +11,7 @@
       "description": "A usage board for Claude Code: a weekly pace gauge and a sliding ticker of your spend per model, in the terminal and on the desktop.",
       "source": "./plugins/usage-ticker",
       "category": "productivity",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "license": "MIT",
       "keywords": [
         "usage",

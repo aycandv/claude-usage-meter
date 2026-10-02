@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { encodeCells } from './base64'
 import { BUTTON_COLS, LEAD_PX, boardFrame, rasterWidth, reserveFor, textLine } from './board'
 import { cardsFromDay, dayTotal, loadingCards, nextSpend, parseCcusage, unavailableCards } from './cards'
-import { PX_PER_COLUMN, deskClock, diagLine, framePhase, memoMarkup, panelInput, panelWidthFor, reasonFor, redrawDue, stripInput, stripKeyParts, stripWidthFor } from './desktop-state'
+import { PX_PER_COLUMN, deskClock, diagLine, firstReading, framePhase, memoMarkup, panelInput, panelWidthFor, reasonFor, redrawDue, stripInput, stripKeyParts, stripWidthFor } from './desktop-state'
 import type { DesktopState, Memo, StripPart } from './desktop-state'
 import type { DayEntry, Parsed } from './cards'
 import { sevenDay, weekFromLimit } from './gauge'
@@ -122,6 +122,7 @@ const stripAsk = (now: number, input: ReturnType<typeof deskStrip>) => {
     idleSince,
     now,
     showsPlaceholder: stripShown?.placeholder ?? true,
+    firstReading: firstReading(stripShown?.parts ?? null, parts),
   })
   return { parts, key, due }
 }
@@ -243,9 +244,20 @@ const refreshSpendIfWanted = async ($: EngineInterface) => {
 }
 
 // The engine's running cost for this session grows with every API response, so its slope is the live pace.
+// The same read also picks up the weekly limit while none is known: the desktop often reports none at session start
+// and none is pushed until a response arrives, so the gauge would otherwise wait for that push.
 const sampleSession = async ($: EngineInterface) => {
   try {
-    const usd = (await $.session.usage()).cost?.usd
+    const usage = await $.session.usage()
+    if (limit === undefined) {
+      const found = sevenDay(usage.rateLimits)
+      if (found !== undefined) {
+        limit = found
+        dirty = true
+        redrawIf($, false) // as a pushed reading: the text line is drawn again; the strip's tick sees the ring
+      }
+    }
+    const usd = usage.cost?.usd
     if (typeof usd === 'number' && Number.isFinite(usd)) {
       sessionSamples = addSample(sessionSamples, await $.clock.now(), usd, SESSION_KEEP_MS)
     }
